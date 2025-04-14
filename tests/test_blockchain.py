@@ -22,15 +22,13 @@ class TestBlockChain(unittest.TestCase):
         """Test if the genesis block is created correctly."""
         genesis_block = self.blockchain.create_genesis_block()
         assert genesis_block.index == 0
-        assert not genesis_block.previous_hash  # Simplified to check for falsy value
+        assert not genesis_block.previous_hash
         assert genesis_block.data == "Nvm"
 
     def test_add_block(self) -> None:
         """Test if a new block is added to the blockchain."""
         self.blockchain.add_block("Block 1 data")
-        assert (
-            self.blockchain.get_chain_length() == CHAIN_LENGTH_AFTER_GENESIS
-        )  # Replaced magic number with constant
+        assert self.blockchain.get_chain_length() == CHAIN_LENGTH_AFTER_GENESIS
         last_block = self.blockchain.get_last_block()
         assert last_block.data == "Block 1 data"
         assert (
@@ -59,13 +57,9 @@ class TestBlockChain(unittest.TestCase):
 
     def test_get_chain_length(self) -> None:
         """Test if the chain length is correct."""
-        assert (
-            self.blockchain.get_chain_length() == 1
-        )  # Only the genesis block initially
+        assert self.blockchain.get_chain_length() == 1
         self.blockchain.add_block("Block 1 data")
-        assert (
-            self.blockchain.get_chain_length() == CHAIN_LENGTH_AFTER_GENESIS
-        )  # Replaced magic number with constant
+        assert self.blockchain.get_chain_length() == CHAIN_LENGTH_AFTER_GENESIS
 
 
 if __name__ == "__main__":
