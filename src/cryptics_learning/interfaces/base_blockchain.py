@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from cryptics_learning.interfaces.base_block import (
-    Block,  # Assuming Block is imported from the correct module
+    BlockInterface,  # Assuming Block is imported from the correct module
 )
 
 
@@ -16,7 +16,7 @@ class BlockchainInterface(ABC):
     """
 
     @abstractmethod
-    def create_genesis_block(self) -> Block:
+    def create_genesis_block(self) -> BlockInterface:
         """Return the genesis (first) block in the chain.
 
         The genesis block is hardcoded and marks the beginning of the blockchain.
@@ -36,7 +36,7 @@ class BlockchainInterface(ABC):
         """
 
     @abstractmethod
-    def get_last_block(self) -> Block:
+    def get_last_block(self) -> BlockInterface:
         """Return the last block in the chain (i.e., the tip).
 
         This is used to build new blocks based on the previous hash.
