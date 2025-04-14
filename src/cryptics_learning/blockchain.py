@@ -30,6 +30,7 @@ class BlockChain(BlockchainInterface):
         """Initialize class."""
         self._chain: list[Block] = []
         self._chain.append(self.create_genesis_block())
+        self.DIFFICULTY = 3
 
     def create_genesis_block(self) -> Block:
         """Return the genesis (first) block in the chain.
@@ -57,6 +58,7 @@ class BlockChain(BlockchainInterface):
         index: int = len(self._chain)
         previous_hash: str = self._chain[-1].block_hash
         new_block: Block = Block(index, data, previous_hash)
+        new_block.mine(self.DIFFICULTY)
         self._chain.append(new_block)
 
     def get_last_block(self) -> Block:
@@ -68,20 +70,33 @@ class BlockChain(BlockchainInterface):
         return self._chain[-1]
 
     def is_valid(self) -> bool:
-        """Return whether the entire chain is valid (hashes + linkage).
+        """Return whether the entire chain is valid (hashes + linkage + proof-of-work).
 
-        Ensures each block's hash is valid and each block links correctly
-        to its predecessor. Inspired by Sections 3 and 4 of the whitepaper, where each block's
-        hash is checked for validity and proper linkage.
+        Ensures each block's:
+        - hash matches its computed contents,
+        - previous_hash matches the previous block's hash,
+        - hash satisfies the proof-of-work difficulty requirement.
+
+        Inspired by Sections 3 and 4 of the Bitcoin whitepaper.
         """
+        difficulty_prefix = "0" * self.DIFFICULTY
         previous_hash = self._chain[0].block_hash
 
         for i in range(1, len(self._chain)):
             block = self._chain[i]
+
+            # Check if previous hash matches
             if block.previous_hash != previous_hash:
                 return False
+
+            # Check if hash matches block content
             if block.block_hash != block.compute_hash():
                 return False
+
+            # Check if hash satisfies proof-of-work
+            if not block.block_hash.startswith(difficulty_prefix):
+                return False
+
             previous_hash = block.block_hash
 
         return True
