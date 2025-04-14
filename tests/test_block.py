@@ -1,0 +1,53 @@
+"""Unit tests for the Block class."""
+
+from collections.abc import Callable
+from unittest.mock import patch
+
+import pytest
+from cryptics_learning.block import Block
+
+HASH_LENGTH = 64
+
+
+@pytest.fixture()
+def block() -> Block:
+    """Return a test Block instance."""
+    return Block(
+        1,
+        "Test Data",
+        "0" * HASH_LENGTH,
+    )
+
+
+def test_block_initialization(block: Block) -> None:
+    """Test Block initializes correctly."""
+    assert block.index == 1
+    assert block.data == "Test Data"
+    assert block.previous_hash == "0" * HASH_LENGTH
+    assert isinstance(block.timestamp, float)
+    assert block.nonce == 0
+    assert block.block_hash is not None
+
+
+def test_compute_hash(block: Block) -> None:
+    """Test compute_hash returns a valid SHA-256 hash."""
+    expected_hash = block.compute_hash()
+    assert isinstance(expected_hash, str)
+    assert len(expected_hash) == HASH_LENGTH
+
+
+@patch("cryptics_learning.block.logger")
+def test_mine(mock_logger: Callable, block: Block) -> None:
+    """Test mining works with display off."""
+    block.mine(difficulty=2, display=False)
+    assert block.block_hash.startswith("00")
+    mock_logger.info.assert_not_called()
+    assert len(block.block_hash) == HASH_LENGTH
+
+
+@patch("cryptics_learning.block.logger")
+def test_mine_with_display(mock_logger: Callable, block: Block) -> None:
+    """Test mining works with display on and logger is called."""
+    block.mine(difficulty=1, display=True)
+    assert block.block_hash.startswith("0")
+    mock_logger.info.assert_called()
