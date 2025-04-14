@@ -6,7 +6,7 @@ setup(
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     install_requires=[
-        # ...
+        "pytest>=7.4.0",
     ],
     extras_require={},
     classifiers=[
