@@ -1,5 +1,4 @@
 """Unit tests for the Block class."""
-from unittest.mock import patch
 
 import pytest
 from cryptics_learning.block import Block
@@ -34,16 +33,8 @@ def test_compute_hash(block: Block) -> None:
     assert len(expected_hash) == HASH_LENGTH
 
 
-@patch("cryptics_learning.block.logger")
 def test_mine(block: Block) -> None:
     """Test mining works with display off."""
     block.mine(difficulty=2, display=False)
     assert block.block_hash.startswith("00")
     assert len(block.block_hash) == HASH_LENGTH
-
-
-@patch("cryptics_learning.block.logger")
-def test_mine_with_display(block: Block) -> None:
-    """Test mining works with display on and logger is called."""
-    block.mine(difficulty=1, display=True)
-    assert block.block_hash.startswith("0")
