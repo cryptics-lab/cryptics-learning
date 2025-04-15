@@ -97,3 +97,6 @@ MANIFEST
 
 # Wheel
 *.whl
+
+# Ruff
+.ruff_cache
