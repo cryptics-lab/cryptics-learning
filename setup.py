@@ -6,6 +6,7 @@ setup(
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     install_requires=[
+        "ecdsa>=0.19.1",
         "pytest>=7.4.0",
     ],
     extras_require={},
