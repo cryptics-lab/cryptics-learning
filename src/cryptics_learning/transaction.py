@@ -1,3 +1,29 @@
+"""transaction.py.
+
+[WALLET]
+  ->
+select UTXOs → build inputs + outputs → create Transaction
+  ->
+sign each input using full-transaction hash
+  ->
+attach signature to each input
+  ->
+return signed Transaction.
+
+[TRANSACTION]
+  ->
+holds inputs + outputs + tx_id
+can compute hash
+can verify signatures
+
+[TRANSACTION INPUT]
+  ->
+knows what UTXO it references
+holds its own signature (and maybe public_key)
+knows how to sign itself
+"""
+
+
 import hashlib
 import json
 import logging
@@ -15,12 +41,20 @@ logging.basicConfig(level=logging.INFO)
 
 
 class TransactionInput(TransactionInputInterface):
-    """Represents a transaction input referencing a UTXO and containing a signature."""
+    """Represents a transaction input referencing a UTXO and containing a signature.
+
+    This input includes the public key of the spender and their digital signature.
+    It's used to prove that the spender owns the referenced UTXO and has authorized
+    this transaction.
+
+    Each input must be signed individually by its respective private key holder.
+    """
 
     def __init__(
         self,
         tx_id: str,
         output_index: int,
+        public_key: str | None = None,
         signature: str | None = None,
     ) -> None:
         """Initialize a TransactionInput.
@@ -29,48 +63,76 @@ class TransactionInput(TransactionInputInterface):
         ----
             tx_id (str): The transaction ID of the UTXO being spent.
             output_index (int): The index of the output within the referenced transaction.
-            signature (Optional[str]): The digital signature to authorize spending (optional at init).
+            public_key (Optional[str]): Hex-encoded public key of the signer.
+            signature (Optional[str]): Hex-encoded digital signature to authorize spending.
         """
         self._tx_id = tx_id
         self._output_index = output_index
+        self._public_key = public_key
         self._signature = signature
 
     @property
     def tx_id(self) -> str:
-        """Return the transaction ID being referenced."""
+        """Return the transaction ID being referenced.
+
+        Returns
+        -------
+            str: The transaction hash of the UTXO being spent.
+        """
         return self._tx_id
 
     @property
     def output_index(self) -> int:
-        """Return the output index in the referenced transaction."""
+        """Return the output index in the referenced transaction.
+
+        Returns
+        -------
+            int: The index of the output within the referenced transaction.
+        """
         return self._output_index
 
     @property
     def signature(self) -> str | None:
-        """Return the signature authorizing the input (if available)."""
+        """Return the digital signature authorizing the input (if available).
+
+        Returns
+        -------
+            Optional[str]: Hex-encoded ECDSA signature, or None.
+        """
         return self._signature
+
+    @property
+    def public_key(self) -> str | None:
+        """Return the public key of the spender (if available).
+
+        Returns
+        -------
+            Optional[str]: Hex-encoded public key, or None.
+        """
+        return self._public_key
 
     def to_dict(self, *, include_signature: bool = False) -> dict:
         """Convert input to dictionary format for serialization.
 
         Args:
         ----
-            include_signature (bool): Whether to include the signature field.
+            include_signature (bool): Whether to include the signature and public key.
 
         Returns:
         -------
-            dict: Serialized dictionary.
+            dict: Serialized dictionary representation.
         """
         d = {
             "tx_id": self._tx_id,
             "output_index": self._output_index,
         }
-        if include_signature and self._signature:
+        if include_signature and self._signature and self._public_key:
             d["signature"] = self._signature
+            d["public_key"] = self._public_key
         return d
 
     def sign(self, message: bytes, private_key: SigningKey) -> None:
-        """Sign this input's message using the provided private key.
+        """Sign this input using the provided private key and attach the public key.
 
         Note:
         ----
@@ -80,15 +142,24 @@ class TransactionInput(TransactionInputInterface):
 
         Args:
         ----
-            message (bytes): The hash/message to sign.
-            private_key (SigningKey): The private key used to sign.
+            message (bytes): The message (typically the unsigned transaction) to sign.
+            private_key (SigningKey): The private key used to sign the input.
         """
         signature = private_key.sign(message)
         self._signature = signature.hex()
+        self._public_key = private_key.verifying_key.to_string().hex()
 
     def __str__(self) -> str:
-        """Return a string representation of the TransactionInput."""
-        return f"TransactionInput(tx_id={self.tx_id}, output_index={self.output_index}, signature={self.signature})"
+        """Return a string representation of the TransactionInput.
+
+        Returns
+        -------
+            str: Human-readable input description.
+        """
+        return (
+            f"TransactionInput(tx_id={self.tx_id}, output_index={self.output_index}, "
+            f"signature={self.signature}, public_key={self.public_key})"
+        )
 
 
 class TransactionOutput(TransactionOutputInterface):
@@ -109,6 +180,11 @@ class TransactionOutput(TransactionOutputInterface):
     def amount(self) -> float:
         """Return the amount associated with the output."""
         return self._amount
+
+    @amount.setter
+    def amount(self, amount: float) -> None:
+        """Set the amount associated with the output."""
+        self._amount = amount
 
     @property
     def recipient(self) -> str:
@@ -200,14 +276,10 @@ class Transaction(TransactionInterface):
         """
         return self.verify([])
 
-    def verify(self, public_keys: list[VerifyingKey]) -> bool:
-        """Verify all input signatures.
+    def verify(self) -> bool:
+        """Verify all input signatures using their embedded public keys.
 
-        Args:
-        ----
-            public_keys (List[VerifyingKey]): Public keys matching the inputs.
-
-        Returns:
+        Returns
         -------
             bool: True if all input signatures are valid.
         """
@@ -215,12 +287,21 @@ class Transaction(TransactionInterface):
             self.to_dict(include_signatures=False),
             sort_keys=True,
         ).encode()
-        for i, inp in enumerate(self._inputs):
+
+        for inp in self._inputs:
             try:
+                if not inp.signature or not inp.public_key:
+                    return False
+
                 signature = bytes.fromhex(inp.signature)
-                public_keys[i].verify(signature, message)
-            except (ValueError, BadSignatureError, TypeError):
+                pub_key_bytes = bytes.fromhex(inp.public_key)
+                verifying_key = VerifyingKey.from_string(pub_key_bytes, curve=SECP256k1)
+
+                verifying_key.verify(signature, message)
+            except (ValueError, TypeError, BadSignatureError) as e:
+                logger.warning("Failed to verify input %s: %s", inp, e)
                 return False
+
         return True
 
     def get_total_input(self) -> float:
@@ -278,4 +359,4 @@ if __name__ == "__main__":
     logger.info(tx)
 
     logger.info("Verifying Transaction:")
-    logger.info("Valid? %s", tx.verify([pk1, pk2]))
+    logger.info("Valid? %s", tx.verify())
