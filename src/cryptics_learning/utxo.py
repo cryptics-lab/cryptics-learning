@@ -2,7 +2,11 @@ from cryptics_learning.interfaces.base_utxo import UTXOInterface
 
 
 class UTXO(UTXOInterface):
-    """Abstract base class for a UTXO (Unspent Transaction Output)."""
+    """Abstract base class for a UTXO (Unspent Transaction Output).
+
+    Note: UTXO's are created by Miners. Wallets cannot change them. The owner
+    of the UTXO is stored in the UTXO itself.
+    """
 
     def __init__(
         self,
