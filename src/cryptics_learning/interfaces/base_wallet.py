@@ -9,7 +9,7 @@ class WalletInterface(ABC):
 
     @property
     @abstractmethod
-    def adress(self) -> str:
+    def address(self) -> str:
         """Return the public address of the wallet.
 
         Returns
@@ -41,12 +41,18 @@ class WalletInterface(ABC):
         """
 
     @abstractmethod
-    def get_utxos(self) -> list[UTXOInterface]:
-        """Return a list of UTXOs currently owned by the wallet.
+    def get_utxos(self) -> dict[tuple[str, int], UTXOInterface]:
+        """Return a dictionary of UTXOs currently owned by the wallet.
 
-        Returns
+        Note:
+        ----
+            - List[UTXOInterface] would mean O(n) lookups.
+            - Dictionary enforces uniqueness
+            - Fast lookups through trees, add, remove and lookup are O(1).
+
+        Returns:
         -------
-            list[UTXOInterface]: Spendable outputs.
+            dict[Tuple[str, int], UTXOInterface]: Spendable outputs.
         """
 
     @abstractmethod
