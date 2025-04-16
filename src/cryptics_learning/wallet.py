@@ -2,7 +2,7 @@ import hashlib
 from logging import Logger
 
 import base58
-from ecdsa import SECP256k1, SigningKey
+from ecdsa import SECP256k1, SigningKey, VerifyingKey
 
 from cryptics_learning.helpers.log_config import setup_logger
 from cryptics_learning.interfaces.base_wallet import WalletInterface
@@ -47,25 +47,29 @@ class Wallet(WalletInterface):
         self._address = self._get_address(self._public_key)
         self._utxos: dict[(str, int), UTXO] = {}
 
-    def _get_address(self, public_key: str) -> str:
-        """Return the address."""
+    def _get_address(self, public_key: VerifyingKey) -> str:
+        """Return a Bitcoin-style Base58Check encoded address from a public key.
+
+        Steps:
+        1. SHA-256 hash of public key
+        2. RIPEMD-160 hash of that SHA-256
+        3. Prepend version byte (0x00 for mainnet)
+        4. Compute checksum (first 4 bytes of double SHA-256)
+        5. Concatenate and Base58 encode
+        """
         pubkey_bytes: bytes = public_key.to_string()
         sha256_result: bytes = hashlib.sha256(pubkey_bytes).digest()
         payload: bytes = hashlib.new("ripemd160", sha256_result).digest()
 
-        # For Bitcoin mainnet, prepend a single byte: b'\x00'
         version_byte: bytes = b"\x00"
         payload_mainnet: bytes = version_byte + payload
 
-        hpm1: bytes = hashlib.sha256(payload_mainnet).digest()
-        hpm2: bytes = hashlib.sha256(hpm1).digest()
+        h1: bytes = hashlib.sha256(payload_mainnet).digest()
+        h2: bytes = hashlib.sha256(h1).digest()
+        checksum: bytes = h2[:4]
 
-        checksum: bytes = hpm2[:3]
-
-        full_result_bytes: bytes = version_byte + payload + checksum
-
-        address: str = base58.b58encode(full_result_bytes).decode()
-        return address
+        full_result: bytes = payload_mainnet + checksum
+        return base58.b58encode(full_result).decode()
 
     @property
     def address(self) -> str:
