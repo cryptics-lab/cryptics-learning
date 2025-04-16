@@ -1,4 +1,5 @@
 import hashlib
+import json
 from logging import Logger
 
 import base58
@@ -8,10 +9,14 @@ from cryptics_learning.helpers.log_config import setup_logger
 from cryptics_learning.interfaces.base_wallet import WalletInterface
 from cryptics_learning.transaction import (
     Transaction,
+    TransactionInput,
+    TransactionOutput,
 )
 from cryptics_learning.utxo import UTXO
 
 logger: Logger = setup_logger()
+
+INSUFFICIENT_FUNDS_ERROR = "Not enough funds in wallet."
 
 
 class Wallet(WalletInterface):
@@ -42,7 +47,7 @@ class Wallet(WalletInterface):
         The wallet also starts with an empty list of known UTXOs.
         """
         self._private_key: SigningKey = SigningKey.generate(curve=SECP256k1)
-        self._public_key: str = self._private_key.verifying_key
+        self._public_key: VerifyingKey = self._private_key.verifying_key
 
         self._address = self._get_address(self._public_key)
         self._utxos: dict[(str, int), UTXO] = {}
@@ -124,6 +129,8 @@ class Wallet(WalletInterface):
         -------
             str: Hex-encoded signature.
         """
+        signature = self._private_key.sign(message)
+        return signature.hex()
 
     def get_utxos(self) -> dict[tuple[str, int], UTXO]:
         """Return a dictionary of UTXOs currently owned by the wallet.
@@ -194,6 +201,45 @@ class Wallet(WalletInterface):
         -------
             Transaction: A signed transaction object ready for broadcasting.
         """
+        amount_subset = 0.0
+        selected_utxos = []
+
+        for (tx_id, output_index), utxo in self._utxos.items():
+            selected_utxos.append((tx_id, output_index, utxo))
+            amount_subset += utxo.amount
+            if amount_subset >= amount:
+                break
+
+        if amount_subset < amount:
+            raise ValueError(INSUFFICIENT_FUNDS_ERROR)
+
+        # 1. Create unsigned inputs (no signatures yet)
+        transaction_inputs = [
+            TransactionInput(tx_id, output_index)
+            for (tx_id, output_index, _) in selected_utxos
+        ]
+
+        # 2. Create outputs
+        transaction_outputs = [TransactionOutput(amount, recipient)]
+
+        change = amount_subset - amount
+        if change > 0:
+            transaction_outputs.append(TransactionOutput(change, self.address))
+
+        # 3. Create unsigned transaction to hash
+        temp_tx = Transaction(transaction_inputs, transaction_outputs)
+
+        message = json.dumps(
+            temp_tx.to_dict(include_signatures=False),
+            sort_keys=True,
+        ).encode()
+
+        # 4. Sign each input using the full tx message
+        for inp in transaction_inputs:
+            inp.sign(message, self._private_key)
+
+        # 5. Return the fully signed transaction
+        return Transaction(transaction_inputs, transaction_outputs)
 
 
 if __name__ == "__main__":
